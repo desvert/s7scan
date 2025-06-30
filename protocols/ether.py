@@ -50,8 +50,8 @@ class EtherRaw():
               iface=self._ifname_, verbose=False)
 
     def recv(self, stop_filter):
-        return filter(stop_filter,
-                      sniff(stop_filter=stop_filter, iface=self._ifname_))
+        return list(filter(stop_filter,
+                      sniff(stop_filter=stop_filter, iface=self._ifname_)))
 
     def sendrcv(self, dst_mac, packet, stop_filter=None):
         receiver = receiverThread(self._ifname_, self._timeout_, stop_filter)

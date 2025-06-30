@@ -5,9 +5,9 @@ from scapy.packet import Packet, bind_layers
 from scapy.layers.l2 import LLC
 from scapy.compat import raw
 from scapy.sendrecv import sendp
-from clnp import CLNP
-from tpkt import TPKT
-from ether import EtherRaw
+from .clnp import CLNP
+from .tpkt import TPKT
+from .ether import EtherRaw
 
 # Timeout walue
 TRUSTED_TIMEOUT_TCP_IP = 1
@@ -205,24 +205,12 @@ class COTP_Layer():
         self._src_ref_ = 0
         self._dst_ref_ = 0
         self._connected_ = False
-    def _filter(self, packets):
-        """ Filters only COTP packets.
-            This protects us from the theoretical case when we send COTP packet to the server and expect COTP answer, 
-            but receive non-COTP packet(s) for some reason
-        """
-        filtered = []
-        if len(packets) == 0:
-            return filtered
-        for packet in packets:
-            if packet.haslayer(COTP):
-                filtered.append(packet)
-        return filtered
     def _send(self, packet):
         if self._is_llc_:
             self._ether_.send(self._dst_mac_, LLC(dsap=0xfe, ssap=0xfe, ctrl=3) / CLNP() / COTP() / packet)
         else:
-            l = len(str(TPKT() / COTP() / packet))
-            self._socket_.send(str(TPKT(length=l) / COTP() / packet))
+            l = len(bytes(TPKT() / COTP() / packet))
+            self._socket_.send(bytes(TPKT(length=l) / COTP() / packet))
     def _sendrcv(self, packet, recv_count=1):
         """ Sends COTP packet and receives up to recv_count COTP packets from the server
         """
@@ -359,10 +347,22 @@ class COTP_Layer():
             if not data.haslayer(COTP_TCP_Data):
                 raise COTP_Exception("[DATA]Incorrect response from server")
         return data
+    def _filter(self, packets):
+        """ Filters only COTP packets.
+            This protects us from the theoretical case when we send COTP packet to the server and expect COTP answer, 
+            but receive non-COTP packet(s) for some reason
+        """
+        filtered = []
+        if not packets or len(packets) == 0:
+            return filtered
+        for packet in packets:
+            if packet.haslayer(COTP):
+                filtered.append(packet)
+        return filtered
     def checksum(self, data):
         c0 = c1 = 0
         for byte in data:
-            c0 += ord(byte)
+            c0 += byte
             c1 += c0
         x = (-c1 - c0) % 255
         y = c1 % 255

@@ -19,7 +19,7 @@ S7SCAN_PLC_FILE = "plc_data.dat"
 def ask_yes_no():
     valid = {"yes": True, "y": True, "no": False, "n": False}
     while True:
-        choice = raw_input().lower()
+        choice = input().lower()
         if choice in valid:
             return valid[choice]
         else:
@@ -141,9 +141,9 @@ def validate_user_args(args):
     elif args.is_llc:
         llc_scan_hosts.extend(args.addresses)
     # Delete empty and repeated hosts
-    llc_scan_hosts = filter(None, llc_scan_hosts)
+    llc_scan_hosts = list(filter(None, llc_scan_hosts))
     llc_scan_hosts = list(OrderedDict.fromkeys(llc_scan_hosts))
-    tcp_scan_hosts = filter(None, tcp_scan_hosts)
+    tcp_scan_hosts = list(filter(None, tcp_scan_hosts))
     tcp_scan_hosts = list(OrderedDict.fromkeys(tcp_scan_hosts))
     # Validate all target IP addresses
     for host in tcp_scan_hosts:
@@ -297,10 +297,10 @@ class PLC_Scanner():
         self.results["Scan start time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         self.results["Command line arguments"] = []
         for arg in sys.argv:
-            self.results["Command line arguments"].append(arg.decode(sys.stdin.encoding).encode("utf-8"))
+            self.results["Command line arguments"].append(arg)
         self.plcs = OrderedDict()
         if log_dir:
-            self.logfile = open(os.path.join(log_dir, S7SCAN_LOG_FILE), "wb")
+            self.logfile = open(os.path.join(log_dir, S7SCAN_LOG_FILE), "w", encoding="utf-8")
             self.plcfile = open(os.path.join(log_dir, S7SCAN_PLC_FILE), "wb")
         else:
             self.logfile = None
@@ -479,7 +479,7 @@ class PLC_Scanner():
 
 
 def main():
-    print("s7scan v1.03 [Python 2] [Scapy-based]")
+    print("s7scan v1.03 [Python 3] [Scapy-based]")
     # Get user arguments
     parser, args = get_user_args(sys.argv[1:])
     # Validate user arguments

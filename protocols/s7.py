@@ -2,7 +2,7 @@ import struct
 from socket import inet_ntoa
 from scapy.packet import Packet, bind_layers
 from scapy.fields import LEShortField, ThreeBytesField, ByteField, ShortField, BitField
-from cotp import COTP_Layer, COTP_LLC_Data, COTP_TCP_Data
+from .cotp import COTP_Layer, COTP_LLC_Data, COTP_TCP_Data
 
 
 class S7COMM_Exception(Exception):
@@ -15,8 +15,9 @@ class S7COMM_Exception(Exception):
         if self._packet_ is None:
             s = "[ERROR][S7]{}".format(self._message_)
         else:
+            # Python 3: use .hex() for bytes
             s = "[ERROR][S7]{}\r\n    Packet:{}".format(
-                self._message_, str(self._packet_).encode('hex'))
+                self._message_, bytes(str(self._packet_), 'utf-8').hex())
         if self._code_ != 0:
             s += "\r\n    Code: {}".format(self._code_)
         if self._code_ == 0xD402:
@@ -110,7 +111,7 @@ bind_layers(S7COMM_Data, S7COMM_Data_SZL,
 class ModuleID_Record():
     def __init__(self, data):
         self.index = struct.unpack("!H", data[:2])[0]
-        self.order_number = data[2:22].strip(" ").strip("\x00")
+        self.order_number = data[2:22].decode(errors="ignore").strip(" ").strip("\x00")
         self.reserved = struct.unpack("!H", data[22:24])[0]
         self.version = struct.unpack("!H", data[24:26])[0]
         self.version2 = struct.unpack("!H", data[26:28])[0]
@@ -207,22 +208,22 @@ class ComponentID_Record():
     def __init__(self, data):
         self.index = struct.unpack("!H", data[:2])[0]
         if self.index in [1, 2, 5]:
-            self.name = data[2:26].strip("\x00")
+            self.name = data[2:26].decode(errors="ignore").strip("\x00")
         elif self.index in [3, 7, 8, 11]:
-            self.name = data[2:34].strip("\x00")
+            self.name = data[2:34].decode(errors="ignore").strip("\x00")
         elif self.index == 4:
-            self.name = data[2:28].strip("\x00")
+            self.name = data[2:28].decode(errors="ignore").strip("\x00")
         elif self.index == 9:
             self.name = ""
             self.manufacturer_id = struct.unpack("!H", data[2:4])[0]
             self.profile_id = struct.unpack("!H", data[4:6])[0]
             self.profile_type = struct.unpack("!H", data[6:8])[0]
         elif self.index == 10:
-            self.name = data[2:28].strip("\x00")
+            self.name = data[2:28].decode(errors="ignore").strip("\x00")
             self.oem_id = struct.unpack("!H", data[28:30])[0]
             self.oem_add_id = struct.unpack("!H", data[30:32])[0]
         else:
-            self.name = data[2:]
+            self.name = data[2:].decode(errors="ignore")
 
     def __str__(self):
         if self.name == "" and self.index not in [9, 10]:
@@ -251,7 +252,8 @@ class ComponentID_Record():
         elif self.index == 11:
             return "    Location designation: {}".format(self.name)
         else:
-            return "    Unknown component identification index ({}) {}\r\n    {}".format(self.index, self.name, self.name.encode("hex"))
+            # Python 3: .encode("hex") replaced with .hex()
+            return "    Unknown component identification index ({}) {}\r\n    {}".format(self.index, self.name, self.name.encode("utf-8").hex())
 
 
 class EthDetailsRecord():
@@ -260,13 +262,8 @@ class EthDetailsRecord():
         self.ip_addr = inet_ntoa(data[2:6])
         self.subnetmask = inet_ntoa(data[6:10])
         self.defaultrouter = inet_ntoa(data[10:14])
-        self.mac_addr = "{}:{}:{}:{}:{}:{}".format(data[14].encode('hex'),
-                                                   data[15].encode('hex'),
-                                                   data[16].encode('hex'),
-                                                   data[17].encode('hex'),
-                                                   data[18].encode('hex'),
-                                                   data[19].encode('hex'))
-        self.source = ord(data[20])
+        self.mac_addr = ":".join("{:02x}".format(b) for b in data[14:20])
+        self.source = data[20]
         if self.source == 0:
             self.source_str = "IP address not initialized"
         elif self.source == 1:
@@ -289,8 +286,8 @@ class EthDetailsRecord():
             s += "    Default gateway: {}\r\n".format(self.defaultrouter)
         s += "    MAC address: {}\r\n".format(self.mac_addr)
         if self.source == 2:
-            s += "    IP address last changed through DCP: {:X}".format(self.dcp_mod_timestamp.encode("hex"))
-        s += "    Physical status of ports: {}".format(self.phys_modes.encode("hex"))
+            s += "    IP address last changed through DCP: {:X}".format(self.dcp_mod_timestamp.hex())
+        s += "    Physical status of ports: {}".format(self.phys_modes.hex())
         return s
 
 
@@ -352,7 +349,7 @@ class S7Layer():
         if not answer.haslayer(S7COMM_Data_SZL):
             raise S7COMM_Exception("[READ_SZL]Incorrect reply from server")
         # Save SZL data
-        szl_data = str(answer[S7COMM_Data_SZL].payload)[:answer[S7COMM_Data_SZL].length]
+        szl_data = bytes(answer[S7COMM_Data_SZL].payload)[:answer[S7COMM_Data_SZL].length]
         # If data unit is not last, we need to get the rest part
         while answer[S7COMM_Data_SZL].last_du:
             answer = self.sendrecv(
@@ -360,7 +357,7 @@ class S7Layer():
                 S7COMM_Data(param_length=4, seq_num=answer[S7COMM_Data].seq_num) /
                 S7COMM_Data_SZL(return_code=0x0A, transport_size_os=0)
             )
-            szl_data = szl_data + str(answer[S7COMM_Data_SZL].payload)[:answer[S7COMM_Data_SZL].length]
+            szl_data = szl_data + bytes(answer[S7COMM_Data_SZL].payload)[:answer[S7COMM_Data_SZL].length]
         return szl_data
 
     def read_szl_list(self):
@@ -414,6 +411,9 @@ class S7Layer():
             entries = self._parse_szl(szl_data, elen=48)
         except S7COMM_Exception:
             return szl_data
+        for entry in entries:
+            records.append(EthDetailsRecord(entry))
+        return records
         for entry in entries:
             records.append(EthDetailsRecord(entry))
         return records
