@@ -479,7 +479,7 @@ class PLC_Scanner():
 
 
 def main():
-    print("s7scan v1.03 [Python 3] [Scapy-based]")
+    print("s7scan v1.04 [Python 3] [Scapy-based]")
     # Get user arguments
     parser, args = get_user_args(sys.argv[1:])
     # Validate user arguments
